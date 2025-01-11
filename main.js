@@ -29,12 +29,12 @@ function playFrequency(frequency = 440, gain = 0.1, time = 0.1) {
       setTimeout(resolve, promisetime * 1000);
     });*/
 }
-function noteObject(sound, beat=current_selected_beat, long=moveStep, accidental = ACCIDENTALS.NATURAL){
+function noteObject(sound, beat = current_selected_beat, long = moveStep, accidental = ACCIDENTALS.NATURAL) {
     return {
         sound: sound,
-        accidental: ACCIDENTALS.NATURAL,
-        beat: current_selected_beat,
-        long: moveStep
+        accidental: accidental,
+        beat: beat,
+        long: long
     }
 }
 var playingNotes = [];
@@ -43,11 +43,14 @@ var canvas;
 var ctx;
 var playing = false;
 var moveStep = 0.5;
-
-var mainedo = 19;
+var mainedo = 12;
 var bpm = 100;
 var current_selected_beat = 0;
 var noteoffset_px = 0;
+var mouseX = 0;
+var mouseY = 0;
+var clickselectX = 0;
+var clickselectY = 0;
 function getStepsFromA4(sound, accidental, edo = mainedo) {
     let { sharpValue, fifthStep } = edoSharpValFifth(edo);
     let soundline = mod7(sound);
@@ -79,9 +82,10 @@ function getStepsFromA4(sound, accidental, edo = mainedo) {
     );
 }
 function playNoteWithObject(obj, edo = mainedo, long = 0.5) {
+    
     playFrequency(
         440 * 2 ** (getStepsFromA4(obj.sound, obj.accidental, edo) / edo),
-        0.1,
+        0.1 * (obj.sound<-12 ? 3 : 1),
         (60 / bpm) * long
     );
 }
@@ -140,10 +144,10 @@ const ACCIDENTALS = {
     FLAT2: accidentalObject(-2, 0),
 };
 function mod7(x) {
-    return x >= 0 ? x % 7 : 7 - (-x % 7);
+    return (x >= 0 ? x % 7 : 7 - (-x % 7))%7;
 }
 function mody(x, y) {
-    return x >= 0 ? x % y : y - (-x % y);
+    return (x >= 0 ? x % y : y - (-x % y))%y;
 }
 function edoSharpValFifth(edo = mainedo) {
     if (sharpFifthDataCache[edo]) {
@@ -171,6 +175,7 @@ function noteup(noteobj, edo = mainedo, down = false) {
         sound: 0,
         accidental: accidentalObject(0, 0),
         beat: noteobj.beat,
+        long: noteobj.long
     };
     //if (edo!= mainedo) throw Error("un12edo is not supported")
     let { sharpValue } = edoSharpValFifth(edo);
@@ -347,13 +352,16 @@ function noteup(noteobj, edo = mainedo, down = false) {
     }
     return result;
 }
-var selectednote = 0;
+var selectednote = -1;
 function drawLine(ctx, x1, y1, x2, y2) {
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);
     ctx.closePath();
     ctx.stroke();
+}
+function incircle(x1, y1, x2, y2, r2){
+    return ((x1-x2)**2+(y1-y2)**2)**0.5<=r2
 }
 function lifeCycle() {
     let { sharpValue, fifthStep } = edoSharpValFifth(mainedo);
@@ -362,6 +370,9 @@ function lifeCycle() {
     ctx.fillRect(0, 0, 700, 700);
 
     for (let i = 1; i < 6; i++) {
+        drawLine(ctx, 0, 80 + i * 20, 700, 80 + i * 20);
+    }
+    for (i = 7; i < 12; i++) {
         drawLine(ctx, 0, 80 + i * 20, 700, 80 + i * 20);
     }
 
@@ -397,11 +408,11 @@ function lifeCycle() {
         // 150
         xoffset = notes[noteindex].beat * 60;
 
-        /*if (selectednote == noteindex) {
-          ctx.fillStyle = "rgb(0, 50, 255)";
+        if (selectednote == noteindex) {
+            ctx.fillStyle = "rgb(0, 50, 255)";
         } else {
-          ctx.fillStyle = "rgb(0, 0, 0)";
-        }*/
+            ctx.fillStyle = "rgb(0, 0, 0)";
+        }
         ctx.beginPath();
         ctx.arc(
             100 + xoffset - noteoffset_px,
@@ -412,17 +423,17 @@ function lifeCycle() {
         );
         ctx.fill();
         ctx.font = "25px Arial";
-        ctx.fillText(
+        if (notes[noteindex].accidental.sharpCount != 0) ctx.fillText(
             notes[noteindex].accidental.sharpCount,
             75 + xoffset - noteoffset_px,
             160 + -notes[noteindex].sound * 10
         );
-        ctx.fillText(
+        if (notes[noteindex].accidental.arrowCount != 0)ctx.fillText(
             notes[noteindex].accidental.arrowCount,
             115 + xoffset - noteoffset_px,
             160 + -notes[noteindex].sound * 10
         );
-        if (notes[noteindex].sound >= 7 || notes[noteindex].sound <= -5) {
+        /*if (notes[noteindex].sound >= 7 || notes[noteindex].sound <= -5) {
             ctx.strokeStyle = "rgb(0, 0, 0)";
             drawLine(
                 ctx,
@@ -431,100 +442,196 @@ function lifeCycle() {
                 115 + xoffset - noteoffset_px,
                 150 + -(Math.floor((notes[noteindex].sound - 1) / 2) * 2 + 1) * 10
             );
-        }
-        ctx.strokeStyle = "rgba(255, 255, 0, 128)";
-        drawLine(ctx,
-            100 + xoffset - noteoffset_px,
-            150 + -notes[noteindex].sound * 10,
-            100 + xoffset - noteoffset_px + notes[noteindex].long*60,
-            150 + -notes[noteindex].sound * 10,
-    
-        )
+        }*/
         ctx.strokeStyle = "rgb(0, 0, 0)";
         if (playing) {
             if (
                 !notes[noteindex].inPlayingNote &&
-                notes[noteindex].beat <= current_selected_beat
+                notes[noteindex].beat <= current_selected_beat &&
+                notes[noteindex].beat + 0.5 >= current_selected_beat
             ) {
                 playNoteWithObject(notes[noteindex], mainedo, notes[noteindex].long);
                 notes[noteindex].inPlayingNote = true;
             }
         }
+        ctx.strokeStyle = "rgba(255, 255, 0, 128)";
+        drawLine(ctx,
+            100 + xoffset - noteoffset_px,
+            150 + -notes[noteindex].sound * 10,
+            100 + xoffset - noteoffset_px + notes[noteindex].long * 60,
+            150 + -notes[noteindex].sound * 10,
+
+        )
+        if (incircle(clickselectX, clickselectY, 100 + xoffset - noteoffset_px, 150 + -notes[noteindex].sound * 10, 10)){
+            selectednote = noteindex;
+            current_selected_beat = notes[noteindex].beat
+            clickselectX = 0;
+            clickselectY = 0;
+        }
     }
     if (current_selected_beat * 60 + 85 + 60 - noteoffset_px > 700) {
-        noteoffset_px += 70;
+        noteoffset_px += 350;
     }
     if (current_selected_beat * 60 + 85 - noteoffset_px < 0) {
-        noteoffset_px -= 70;
+        noteoffset_px -= 350;
     }
     ctx.fillStyle = "rgba(0, 50, 255, 25%)";
     ctx.fillRect(current_selected_beat * 60 + 85 - noteoffset_px, 0, 30, 700);
+    // moveStep
+
+    ctx.strokeStyle = "rgba(255, 255, 0, 128)";
+    drawLine(ctx,
+        100 + current_selected_beat * 60 - noteoffset_px,
+        150 + -1 * 10,
+        100 + current_selected_beat * 60 - noteoffset_px + moveStep * 60,
+        150 + -1 * 10,
+
+    )
+    ctx.font = "25px Arial";
+    ctx.fillText(current_selected_beat.toFixed(3), 100 + current_selected_beat * 60 - noteoffset_px, 40)
+
     /*for (let i = 0; i< 10; i++){
       drawLine(ctx, i*40, 100, i*40, 180)
     }*/
     if (playing) {
         current_selected_beat += ((1 / 30) * bpm) / 60;
     }
+    ctx.fillText(
+        `${mouseX},${mouseY}`,
+        mouseX,
+        mouseY
+    );
 }
 document.addEventListener("DOMContentLoaded", function () {
     window.canvas = document.querySelector("canvas#canvas");
     window.ctx = canvas.getContext("2d");
+    canvas.addEventListener("mousemove", (e) => {
+        mouseX = e.offsetX;
+        mouseY = e.offsetY;
+    })
+    canvas.addEventListener("click", (e)=> {
+        clickselectX = e.offsetX;
+        clickselectY = e.offsetY;
+    })
+    //canvas.addEventListener("")
     setInterval(lifeCycle, 33);
 });
 beatPlaying = 0;
+lastcontrol = Date.now();
 document.addEventListener("keydown", function (x) {
     //console.log(x.key);
     switch (x.key) {
+        case 'Control':
+            lastcontrol = Date.now()
+            break;
+        case "1":
+            moveStep = 0.25
+            break;
+        case "2":
+            
+            moveStep = 0.5
+            if (Date.now() - lastcontrol < 200) {
+                moveStep*=1.5
+            }
+            break;
+        case "3":
+            moveStep = 1
+            if (Date.now() - lastcontrol < 200) {
+                moveStep*=1.5
+            }
+            break;
+        case "4":
+            moveStep = 2
+            if (Date.now() - lastcontrol < 200) {
+                moveStep*=1.5
+            }
+            break;
+        case "5":
+            moveStep = 4
+            break;
         case "e":
         case "E":
-            if (!playing){
-                notes.push(noteObject(-3))
+            if (!playing) {
+                a = notes.push(noteObject(-3))
+                selectednote = a - 1
+                playNoteWithObject(notes[selectednote], mainedo, 0.2)
             }
 
             break;
         case "f":
         case "F":
-            if (!playing){
-                notes.push(noteObject(-2))
+            if (!playing) {
+                a = notes.push(noteObject(-2))
+                selectednote = a - 1
+                playNoteWithObject(notes[selectednote], mainedo, 0.2)
             }
 
             break;
         case "g":
         case "G":
-            if (!playing){
-                notes.push(noteObject(-1))
+            if (!playing) {
+                a = notes.push(noteObject(-1))
+                selectednote = a - 1
+                playNoteWithObject(notes[selectednote], mainedo, 0.2)
             }
 
             break;
         case "a":
         case "A":
-            if (!playing){
-                notes.push(noteObject(0))
+            if (!playing) {
+                a = notes.push(noteObject(0))
+                selectednote = a - 1
+                playNoteWithObject(notes[selectednote], mainedo, 0.2)
             }
 
             break;
         case "b":
         case "B":
-            if (!playing){
-                notes.push(noteObject(1))
+            if (Date.now() - lastcontrol < 200) {
+                let a=Number(prompt("set BPM:"))
+                if (!isNaN(a)){
+                    bpm = Math.max(bpm, 1e-325)
+                }
+            } else if (!playing) {
+                a = notes.push(noteObject(1))
+                selectednote = a - 1
+                playNoteWithObject(notes[selectednote], mainedo, 0.2)
             }
 
             break;
         case "c":
         case "C":
-            if (!playing){
-                notes.push(noteObject(2))
+            if (!playing) {
+                a = notes.push(noteObject(2))
+                selectednote = a - 1
+                playNoteWithObject(notes[selectednote], mainedo, 0.2)
             }
 
             break;
         case "d":
         case "D":
-            if (!playing){
-                notes.push(noteObject(3))
+            if (!playing) {
+                a = notes.push(noteObject(3))
+                selectednote = a - 1
+                playNoteWithObject(notes[selectednote], mainedo, 0.2)
             }
 
             break;
+        case "N":
+            selectednote = -1
+            break;
         case "ArrowDown":
+            if (Date.now() - lastcontrol < 200) {
+                if (selectednote!=-1){
+                    notes[selectednote].sound -= 7
+                    playNoteWithObject(notes[selectednote], mainedo, 0.2)
+                }
+            } else {
+                if (selectednote!=-1){
+                    notes[selectednote] = noteup(notes[selectednote], mainedo, true)
+                    playNoteWithObject(notes[selectednote], mainedo, 0.2)
+                }
+            }
             x.preventDefault();
             break;
 
@@ -538,6 +645,17 @@ document.addEventListener("keydown", function (x) {
             if (!playing) current_selected_beat -= moveStep;
             break;
         case "ArrowUp":
+            if (Date.now() - lastcontrol < 200) {
+                if (selectednote!=-1){
+                    notes[selectednote].sound += 7
+                    playNoteWithObject(notes[selectednote], mainedo, 0.2)
+                }
+            } else {
+                if (selectednote!=-1){
+                    notes[selectednote] = noteup(notes[selectednote], mainedo)
+                    playNoteWithObject(notes[selectednote], mainedo, 0.2)
+                }
+            }
             x.preventDefault();
             break;
         case "Enter":
@@ -546,13 +664,60 @@ document.addEventListener("keydown", function (x) {
                 for (const note of notes) {
                     note.inPlayingNote = false;
                 }
-                current_selected_beat = 0
+                current_selected_beat = Math.floor(current_selected_beat)
             }
+            break;
+        case "Delete":
+            if (playing == false) {
+                /*for (let i = 0; i < notes.length; i++) {
+                    if (notes[i].beat == current_selected_beat) {
+                        notes.splice(i, 1);
+                        --i;
+                    }
+                }*/
+                if (selectednote != -1){
+                    notes.splice(selectednote, 1)
+                }
+            }
+            break;
     }
 });
 function toStartPosition() {
     current_selected_beat = 0;
     for (const note of notes) {
         note.inPlayingNote = false;
+    }
+}
+function exportFile() {
+    let str = JSON.stringify({notes, bpm, edo: mainedo})
+    let file = new Blob([str], {
+        type: "text/plain"
+    })
+    window.URL = window.URL || window.webkitURL;
+    let a = document.createElement("a")
+    a.href = window.URL.createObjectURL(file)
+    a.download = "Chart.json"
+    a.click()
+}
+
+function importFile() {
+    let a = document.createElement("input")
+    a.setAttribute("type", "file")
+    a.click()
+    a.onchange = () => {
+        let fr = new FileReader();
+        fr.onload = function () {
+            let save = fr.result
+            
+            current_selected_beat = 0;
+            noteoffset_px = 0;
+            playingNotes = []
+
+            var { notes,bpm,edo } = JSON.parse(save)
+            window.notes = notes
+            window.bpm = bpm;
+            window.mainedo = edo;
+        }
+        fr.readAsText(a.files[0]);
     }
 }
