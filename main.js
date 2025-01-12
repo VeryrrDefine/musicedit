@@ -5,7 +5,7 @@ function playFrequency(frequency = 440, gain = 0.1, time = 0.1) {
     const gainNode = actx.createGain();
     oscillator.connect(gainNode);
     gainNode.connect(actx.destination);
-    oscillator.type = "sine";
+    oscillator.type = soundtype;
 
     gainNode.gain.value = gain;
     oscillator.frequency.value = frequency;
@@ -37,6 +37,14 @@ function noteObject(sound, beat = current_selected_beat, long = moveStep, accide
         long: long
     }
 }
+function setsquare(){
+    soundtype="square"
+}
+function setsine(){
+    soundtype = "sine"
+}
+var soundtype="square"
+var setting_bpm = false;
 var playingNotes = [];
 const sharpFifthDataCache = {};
 var canvas;
@@ -51,6 +59,12 @@ var mouseX = 0;
 var mouseY = 0;
 var clickselectX = 0;
 var clickselectY = 0;
+var beat_xoffset = 100;
+var downmode = false;
+
+function setdownMode(){
+    downmode = !downmode
+}
 function getStepsFromA4(sound, accidental, edo = mainedo) {
     let { sharpValue, fifthStep } = edoSharpValFifth(edo);
     let soundline = mod7(sound);
@@ -85,9 +99,50 @@ function playNoteWithObject(obj, edo = mainedo, long = 0.5) {
     
     playFrequency(
         440 * 2 ** (getStepsFromA4(obj.sound, obj.accidental, edo) / edo),
-        0.1 * (obj.sound<-12 ? 3 : 1),
-        (60 / bpm) * long
+        0.1,
+        Math.min((60 / bpm) * long, 0.5)
     );
+    //声音减弱
+
+    if ((60 / bpm) * long >0.5){
+        setTimeout(
+            function () {
+                playFrequency(
+                    440 * 2 ** (getStepsFromA4(obj.sound, obj.accidental, edo) / edo),
+                    0.075,
+                    Math.min(((60 / bpm) * long) -0.5, 0.5)
+                );
+
+            },
+            500
+        )
+        if ((60 / bpm) * long> 1){
+            setTimeout(
+                function () {
+                    playFrequency(
+                        440 * 2 ** (getStepsFromA4(obj.sound, obj.accidental, edo) / edo),
+                        0.05,
+                        Math.min((60 / bpm) * long-1, 0.5)
+                    );
+    
+                },
+                1000
+            )
+            if ((60 / bpm) * long> 1.5){
+                setTimeout(
+                    function () {
+                        playFrequency(
+                            440 * 2 ** (getStepsFromA4(obj.sound, obj.accidental, edo) / edo),
+                            0.025,
+                            (60 / bpm) * long-1.5
+                        );
+        
+                    },
+                    1500
+                )
+            }
+        }
+    }
 }
 /*
 note object:
@@ -365,15 +420,16 @@ function incircle(x1, y1, x2, y2, r2){
 }
 function lifeCycle() {
     let { sharpValue, fifthStep } = edoSharpValFifth(mainedo);
+    yoffset = downmode ? 150 : 0
     ctx.fillStyle = "rgb(245, 245, 245)";
     ctx.strokeStyle = "rgb(0, 0, 0)";
     ctx.fillRect(0, 0, 700, 700);
 
     for (let i = 1; i < 6; i++) {
-        drawLine(ctx, 0, 80 + i * 20, 700, 80 + i * 20);
+        drawLine(ctx, 0, 80 + i * 20 + yoffset, 700, 80 + i * 20 + yoffset);
     }
     for (i = 7; i < 12; i++) {
-        drawLine(ctx, 0, 80 + i * 20, 700, 80 + i * 20);
+        drawLine(ctx, 0, 80 + i * 20 + yoffset, 700, 80 + i * 20 + yoffset);
     }
 
     ctx.fillStyle = "rgb(0, 0, 0)";
@@ -397,8 +453,8 @@ function lifeCycle() {
     );
 
     ctx.font = "50px Arial";
-    ctx.fillText("4", 2 - noteoffset_px, 140);
-    ctx.fillText("4", 2 - noteoffset_px, 180);
+    ctx.fillText("4", 2 - noteoffset_px, 140 + yoffset);
+    ctx.fillText("4", 2 - noteoffset_px, 180 + yoffset);
 
     ctx.fillStyle = "rgb(0, 0, 0)";
     for (const noteindex in notes) {
@@ -406,7 +462,7 @@ function lifeCycle() {
             notes[noteindex].inPlayingNote = false;
         }
         // 150
-        xoffset = notes[noteindex].beat * 60;
+        xoffset = notes[noteindex].beat * beat_xoffset;
 
         if (selectednote == noteindex) {
             ctx.fillStyle = "rgb(0, 50, 255)";
@@ -416,7 +472,7 @@ function lifeCycle() {
         ctx.beginPath();
         ctx.arc(
             100 + xoffset - noteoffset_px,
-            150 + -notes[noteindex].sound * 10,
+            150 + -notes[noteindex].sound * 10 + yoffset,
             10,
             0,
             2 * Math.PI
@@ -426,12 +482,12 @@ function lifeCycle() {
         if (notes[noteindex].accidental.sharpCount != 0) ctx.fillText(
             notes[noteindex].accidental.sharpCount,
             75 + xoffset - noteoffset_px,
-            160 + -notes[noteindex].sound * 10
+            160 + -notes[noteindex].sound * 10 + yoffset
         );
         if (notes[noteindex].accidental.arrowCount != 0)ctx.fillText(
             notes[noteindex].accidental.arrowCount,
             115 + xoffset - noteoffset_px,
-            160 + -notes[noteindex].sound * 10
+            160 + -notes[noteindex].sound * 10 + yoffset
         );
         /*if (notes[noteindex].sound >= 7 || notes[noteindex].sound <= -5) {
             ctx.strokeStyle = "rgb(0, 0, 0)";
@@ -457,38 +513,39 @@ function lifeCycle() {
         ctx.strokeStyle = "rgba(255, 255, 0, 128)";
         drawLine(ctx,
             100 + xoffset - noteoffset_px,
-            150 + -notes[noteindex].sound * 10,
-            100 + xoffset - noteoffset_px + notes[noteindex].long * 60,
-            150 + -notes[noteindex].sound * 10,
+            150 + -notes[noteindex].sound * 10 + yoffset,
+            100 + xoffset - noteoffset_px + notes[noteindex].long * beat_xoffset,
+            150 + -notes[noteindex].sound * 10 + yoffset,
 
         )
-        if (incircle(clickselectX, clickselectY, 100 + xoffset - noteoffset_px, 150 + -notes[noteindex].sound * 10, 10)){
+        if (incircle(clickselectX, clickselectY + yoffset, 100 + xoffset - noteoffset_px, 150 + -notes[noteindex].sound * 10 + yoffset, 10)){
             selectednote = noteindex;
-            current_selected_beat = notes[noteindex].beat
+            if (!playing)current_selected_beat = notes[noteindex].beat
             clickselectX = 0;
             clickselectY = 0;
         }
     }
-    if (current_selected_beat * 60 + 85 + 60 - noteoffset_px > 700) {
+    if (current_selected_beat *beat_xoffset + 85 + 60 - noteoffset_px > 700) {
         noteoffset_px += 350;
     }
-    if (current_selected_beat * 60 + 85 - noteoffset_px < 0) {
+    if (current_selected_beat * beat_xoffset + 85 - noteoffset_px < 0) {
         noteoffset_px -= 350;
     }
     ctx.fillStyle = "rgba(0, 50, 255, 25%)";
-    ctx.fillRect(current_selected_beat * 60 + 85 - noteoffset_px, 0, 30, 700);
+    ctx.fillRect(current_selected_beat * beat_xoffset + 85 - noteoffset_px, 0, 30, 700);
     // moveStep
 
-    ctx.strokeStyle = "rgba(255, 255, 0, 128)";
+    ctx.strokeStyle = pressed_control ? "rgba(0, 255, 255, 128)":"rgba(255, 255, 0, 128)";
+    
     drawLine(ctx,
-        100 + current_selected_beat * 60 - noteoffset_px,
+        100 + current_selected_beat * beat_xoffset - noteoffset_px,
         150 + -1 * 10,
-        100 + current_selected_beat * 60 - noteoffset_px + moveStep * 60,
+        100 + current_selected_beat * beat_xoffset - noteoffset_px + moveStep * beat_xoffset,
         150 + -1 * 10,
 
     )
     ctx.font = "25px Arial";
-    ctx.fillText(current_selected_beat.toFixed(3), 100 + current_selected_beat * 60 - noteoffset_px, 40)
+    ctx.fillText(current_selected_beat.toFixed(3), 100 + current_selected_beat * beat_xoffset - noteoffset_px, 40)
 
     /*for (let i = 0; i< 10; i++){
       drawLine(ctx, i*40, 100, i*40, 180)
@@ -517,12 +574,21 @@ document.addEventListener("DOMContentLoaded", function () {
     setInterval(lifeCycle, 33);
 });
 beatPlaying = 0;
-lastcontrol = Date.now();
+pressed_control = false
+function downCurrentNote() {
+    notes[selectednote] = noteup(notes[selectednote], mainedo, true)
+                    playNoteWithObject(notes[selectednote], mainedo, 0.2)
+}
+function upCurrentNote() {
+    notes[selectednote] = noteup(notes[selectednote], mainedo)
+                    playNoteWithObject(notes[selectednote], mainedo, 0.2)
+}
 document.addEventListener("keydown", function (x) {
     //console.log(x.key);
     switch (x.key) {
+        //#region A
         case 'Control':
-            lastcontrol = Date.now()
+            pressed_control = true
             break;
         case "1":
             moveStep = 0.25
@@ -530,19 +596,19 @@ document.addEventListener("keydown", function (x) {
         case "2":
             
             moveStep = 0.5
-            if (Date.now() - lastcontrol < 200) {
+            if (pressed_control) {
                 moveStep*=1.5
             }
             break;
         case "3":
             moveStep = 1
-            if (Date.now() - lastcontrol < 200) {
+            if (pressed_control) {
                 moveStep*=1.5
             }
             break;
         case "4":
             moveStep = 2
-            if (Date.now() - lastcontrol < 200) {
+            if (pressed_control) {
                 moveStep*=1.5
             }
             break;
@@ -587,11 +653,12 @@ document.addEventListener("keydown", function (x) {
             break;
         case "b":
         case "B":
-            if (Date.now() - lastcontrol < 200) {
-                let a=Number(prompt("set BPM:"))
-                if (!isNaN(a)){
-                    bpm = Math.max(bpm, 1e-325)
-                }
+            if (pressed_control) {
+                x.preventDefault()
+
+                console.log("eee");
+                setting_bpm = true
+                console.log("aaa")
             } else if (!playing) {
                 a = notes.push(noteObject(1))
                 selectednote = a - 1
@@ -620,16 +687,16 @@ document.addEventListener("keydown", function (x) {
         case "N":
             selectednote = -1
             break;
+        // #endregion A
         case "ArrowDown":
-            if (Date.now() - lastcontrol < 200) {
+            if (pressed_control) {
                 if (selectednote!=-1){
                     notes[selectednote].sound -= 7
                     playNoteWithObject(notes[selectednote], mainedo, 0.2)
                 }
             } else {
                 if (selectednote!=-1){
-                    notes[selectednote] = noteup(notes[selectednote], mainedo, true)
-                    playNoteWithObject(notes[selectednote], mainedo, 0.2)
+                    downCurrentNote()
                 }
             }
             x.preventDefault();
@@ -645,15 +712,14 @@ document.addEventListener("keydown", function (x) {
             if (!playing) current_selected_beat -= moveStep;
             break;
         case "ArrowUp":
-            if (Date.now() - lastcontrol < 200) {
+            if (pressed_control) {
                 if (selectednote!=-1){
                     notes[selectednote].sound += 7
                     playNoteWithObject(notes[selectednote], mainedo, 0.2)
                 }
             } else {
                 if (selectednote!=-1){
-                    notes[selectednote] = noteup(notes[selectednote], mainedo)
-                    playNoteWithObject(notes[selectednote], mainedo, 0.2)
+                    upCurrentNote()
                 }
             }
             x.preventDefault();
@@ -682,8 +748,17 @@ document.addEventListener("keydown", function (x) {
             break;
     }
 });
+document.addEventListener("keyup", function (x){
+    switch(x.key){
+        
+        case 'Control':
+            pressed_control = false
+            break;
+    }
+})
 function toStartPosition() {
     current_selected_beat = 0;
+    noteoffset_px=0;
     for (const note of notes) {
         note.inPlayingNote = false;
     }
@@ -719,5 +794,133 @@ function importFile() {
             window.mainedo = edo;
         }
         fr.readAsText(a.files[0]);
+    }
+}
+
+function importFromlchzh3473(){
+    let txt = prompt("Import text from https://lchzh3473.github.io/play/")
+    let tempbpm = prompt("Import time of notes(second)")
+    beat_unit = 1;
+    if (!isNaN(tempbpm)){
+        var tempbpm1 = 60/Number(tempbpm);
+        if (tempbpm1 >= 200){
+            beat_unit = 1/(2**Math.ceil(Math.log2(tempbpm1/200)));
+        }
+        window.bpm = 60/Number(tempbpm)*beat_unit
+    }
+    
+    var tempnotes = []
+    window.tempbeat = 0;
+    var tempsound = 0;
+    for (let i = 0; i<txt.length; ){
+        switch(txt[i]){
+            case "-":
+                tempbeat+= beat_unit;
+                break;
+            case "C":
+            case "c":
+                tempsound = -5
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    tempsound = -5 + Number(txt[i+1])*7
+                }
+                tempnotes.push(noteObject(
+                    tempsound, tempbeat, beat_unit, (txt[i]=="c")?ACCIDENTALS.SHARP : ACCIDENTALS.NATURAL
+                ))
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    i++
+                }
+                break;
+            case "D":
+            case "d":
+                tempsound = -4
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    tempsound = -4 + Number(txt[i+1])*7
+                }
+                tempnotes.push(noteObject(
+                    tempsound, tempbeat, beat_unit, (txt[i]=="d")?ACCIDENTALS.SHARP : ACCIDENTALS.NATURAL
+                ))
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    i++
+                }
+                break;
+            case "E":
+            case "e":
+                tempsound = -3
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    tempsound = -3 + Number(txt[i+1])*7
+                }
+                tempnotes.push(noteObject(
+                    tempsound, tempbeat, beat_unit, (txt[i]=="e")?ACCIDENTALS.SHARP : ACCIDENTALS.NATURAL
+                ))
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    i++
+                }
+                break;
+            case "F":
+            case "f":
+                tempsound = -2
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    tempsound = -2 + Number(txt[i+1])*7
+                }
+                tempnotes.push(noteObject(
+                    tempsound, tempbeat, beat_unit, (txt[i]=="f")?ACCIDENTALS.SHARP : ACCIDENTALS.NATURAL
+                ))
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    i++
+                }
+                break;
+            case "G":
+            case "g":
+                tempsound = -1
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    tempsound = -1 + Number(txt[i+1])*7
+                }
+                tempnotes.push(noteObject(
+                    tempsound, tempbeat, beat_unit, (txt[i]=="g")?ACCIDENTALS.SHARP : ACCIDENTALS.NATURAL
+                ))
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    i++
+                }
+                break;
+            case "A":
+            case "a":
+                tempsound=0
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    tempsound = Number(txt[i+1])*7
+                }
+                tempnotes.push(noteObject(
+                    tempsound, tempbeat, beat_unit, (txt[i]=="a")?ACCIDENTALS.SHARP : ACCIDENTALS.NATURAL
+                ))
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    i++
+                }
+                break;
+            case "B":
+            case "b":
+                tempsound = 1
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    tempsound = 1+ Number(txt[i+1])*7
+                }
+                tempnotes.push(noteObject(
+                    tempsound, tempbeat, beat_unit, (txt[i]=="b")?ACCIDENTALS.SHARP : ACCIDENTALS.NATURAL
+                ))
+                if (i!=txt.length-1 && /[0-9]/.test(txt[i+1])){
+                    i++
+                }
+                break;
+        }
+        i++
+    }
+    mainedo = 12
+    window.notes = tempnotes
+}
+function convertstob(){
+    if (mainedo==12){
+        for (let i = 0; i<notes.length; i++){
+            if (notes[i].accidental.sharpCount == 1){
+                notes[i].sound+=1
+                notes[i].accidental = ACCIDENTALS.FLAT
+            }
+        }
     }
 }
